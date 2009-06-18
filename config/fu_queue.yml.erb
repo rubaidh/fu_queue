@@ -1,0 +1,21 @@
+defaults: &defaults
+  :host: localhost
+  :adapter: StompAdapter
+
+development:
+  <%= queue_name %>:
+    :name: /queue/<%= app_name %>/development/<%= queue_name %>
+    <<: *defaults
+
+test: &test
+  <%= queue_name %>:
+    :name: /queue/<%= app_name %>/test/<%= queue_name %>
+    <<: *defaults
+
+cucumber:
+  <<: *test
+
+production:
+  <%= queue_name %>:
+    :name: /queue/<%= app_name %>/<%= queue_name %>
+    <<: *defaults

@@ -1,13 +1,83 @@
-FuQueue
-=======
+= FuQueue
 
-Introduction goes here.
-
-
-Example
-=======
-
-Example goes here.
+FuQueue is a Rails gem that was created to make the process of implementing an Enterprise Service Bus (ESB) within a rails application a fairly straight forward process.
 
 
-Copyright (c) 2009 [name of plugin creator], released under the MIT license
+== Example Scenario
+
+Your application has a data model that is regularly creating alot of new instances, which then need some post-processing carried out in an asynchronous manner so we aren't holding up any of the application server processes (mongrel/passenger), but still completed in a short as possible time.
+
+An example application for a sample usage is a Ticket Support System, where it receives alot of tickets that we then want to do some natural language post-processing on in an attempt to match the tickets up to other related tickets that have already been solved by the support staff.
+
+== Example Configuration & Solution
+
+FuQueue relies on ActiveMQ as the message queue. ActiveMQ can be downloaded here:
+http://activemq.apache.org/download.html
+
+We've been using version 5.2.0 so probably the version to go for.
+
+It is java based so you will probably want the Java 1.5 JRE if you don't have a JVM installed.
+
+The plugin also relies on smqueue, which does the heavy lifting on creating a Simple Message Queue protocol with ruby bindings. It
+can be installed as part of the next step.
+
+=== Install the FuQueue and smqueue gems
+
+In environment.rb add to your Rails::Initializer.run block:
+
+  config.gem 'seanohalpin-smqueue', :lib => 'smqueue',    :source => 'http://gems.github.com'
+  config.gem 'fu_queue' # available from rubyforge and github 
+
+Vendor the gems, fire up a console and run:
+
+  rake gems:unpack:dependencies
+
+
+=== Generate a configuration file
+
+Now that you have the gem installed, you'll now have a generator available to setup a message queue
+
+  script/generate fu_queue <message_queue_name>
+
+This will create a configuration yaml file located in
+
+  'RAILS_ROOT/config/fu_queue.yml'
+
+By default, this will setup a message queue for each of the default rails environments (development/test/production) and an additional cucumber environment so your cucumber features won't get angry.
+
+If you want to run more than one queue, simply add the details to this yaml file.
+
+
+=== Put and Get from the Queue
+
+Now we can pile stuff onto our Queue:
+
+For example, our application has just created a new AR object:
+
+  @ticket = Ticket.create!(:title   => 'Help',
+                           :content => 'My computer tries to start up but gives me "Error Loading Operating System"?',
+                           :state   => 'unassigned')
+
+And in a callback (after_create / state_machine transition etc) we have a line of code to put this ticket onto our processing queue:
+
+  FuQueue[:message_queue_name].put(@ticket.id)
+
+That's us got a message on our activeMQ queue!
+
+Now we just need to pull the messages back off the queue and do something with them. In our ticket model we have a static method which will we want to run as a daemon process:
+
+  def self.run_post_processor
+    FuQueue[:message_queue_name].get do |ticket_id|
+      ticket = find(ticket_id)
+      ticket.compare_and_suggest_already_solved_tickets!
+    end
+  end
+
+==== NOTE
+The put method will accept any object as its argument and simply serialise it before pushing it onto the queue. And the inverse case is true for the get method, it will deserialise the message back into the original object.
+
+
+And that's about all there is to it! More to add on the daemonizing.
+
+
+Copyright (c) 2009 Rubaidh Ltd, released under the MIT license
